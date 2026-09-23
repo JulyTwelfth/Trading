@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --dev
+      # The coverage gate (--cov=app --cov-report=term-missing --cov-fail-under=90)
+      # is configured once via addopts in pyproject.toml, so this fails the build
+      # if overall line coverage drops below 90%.
+      - run: uv run pytest
+        # Dummy values: app/infra/config.py instantiates Settings() at import
+        # time and these two fields are required. The suite makes no real
+        # network calls, so any non-empty strings satisfy validation.
+        env:
+          SUPABASE_URL: "http://localhost"
+          SUPABASE_SERVICE_KEY: "dummy-key-for-ci"

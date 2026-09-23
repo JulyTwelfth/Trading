@@ -1,0 +1,12 @@
+.claude/
+.vscode/
+.venv/
+.env
+__pycache__/
+*.pyc
+.coverage
+.coverage.*
+*.log
+logs/
+state/
+RUN_HISTORY.md
