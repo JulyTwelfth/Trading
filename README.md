@@ -24,6 +24,17 @@ uv run server
 
 This is shorthand for `uv run uvicorn app.main:app --reload`
 
+Open the local control dashboard after the server starts:
+
+```
+http://127.0.0.1:8000
+```
+
+The dashboard connects to `/ws` on the same server. It supports license login,
+wallet/balance status, farm start and stop controls, positions, order events,
+rewards/PnL summaries, and the manual market blacklist. Keep the page open while
+the farm is running; closing its WebSocket stops the farm and starts order cleanup.
+
 To also capture the session to a log file, add `--log`.
 It writes `logs/session-<timestamp>.log`, one file per launch (reloads keep
 appending to that same file):

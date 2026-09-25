@@ -6,6 +6,9 @@ __pycache__/
 *.pyc
 .coverage
 .coverage.*
+.pytest_cache/
+.test-tmp*/
+pytest-cache-files-*/
 *.log
 logs/
 state/

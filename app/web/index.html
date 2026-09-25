@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Trading Farm Console</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Trading Farm Console">
+          <span class="brand-mark">TF</span>
+          <span>
+            <strong>Trading Farm</strong>
+            <small>Polymarket liquidity console</small>
+          </span>
+        </a>
+        <div class="topbar-actions">
+          <span id="connection-pill" class="status-pill offline">
+            <span class="status-dot"></span>
+            <span id="connection-label">未连接</span>
+          </span>
+          <button id="disconnect-button" class="button ghost compact" type="button" disabled>
+            断开
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section id="login-panel" class="login-wrap" aria-labelledby="login-title">
+          <div class="login-card">
+            <div class="eyebrow">LOCAL CONTROL PLANE</div>
+            <h1 id="login-title">连接交易后端</h1>
+            <p class="muted">
+              License 仅在当前页面内存中使用，不会保存到浏览器。后端必须先在本机启动。
+            </p>
+            <form id="login-form">
+              <label class="field full">
+                <span>License Key</span>
+                <div class="input-action">
+                  <input
+                    id="license-key"
+                    name="license_key"
+                    type="password"
+                    autocomplete="off"
+                    spellcheck="false"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    required
+                  />
+                  <button id="toggle-license" class="inline-button" type="button">显示</button>
+                </div>
+              </label>
+              <button id="connect-button" class="button primary full-width" type="submit">
+                连接 localhost
+              </button>
+            </form>
+            <div class="login-note">
+              <span class="mini-dot"></span>
+              <span>连接地址：<code id="ws-endpoint">ws://127.0.0.1:8000/ws</code></span>
+            </div>
+          </div>
+        </section>
+
+        <div id="dashboard" hidden>
+          <section class="risk-banner" role="note">
+            <strong>实盘提示</strong>
+            <span>
+              本页面会发送真实订单。保持页面开启；关闭或断线会触发 farm 停止与撤单清理。
+              清理可能失败，异常后必须到 Polymarket 复核。
+              当前 bankroll 是单个市场的准入上限，并不是严格的全局资金锁。
+            </span>
+          </section>
+
+          <section class="metrics" aria-label="会话概览">
+            <article class="metric-card">
+              <span>钱包余额</span>
+              <strong id="metric-balance">—</strong>
+              <small>Polymarket USD</small>
+            </article>
+            <article class="metric-card">
+              <span>运行状态</span>
+              <strong id="metric-state">待机</strong>
+              <small id="metric-elapsed">00:00:00</small>
+            </article>
+            <article class="metric-card">
+              <span>活跃市场</span>
+              <strong id="metric-markets">0</strong>
+              <small id="metric-volume">成交量 $0.00</small>
+            </article>
+            <article class="metric-card">
+              <span>奖励 / 日</span>
+              <strong id="metric-rewards-day">$0.00</strong>
+              <small id="metric-rewards-total">累计 $0.00</small>
+            </article>
+            <article class="metric-card danger-card">
+              <span>会话亏损</span>
+              <strong id="metric-loss">$0.00</strong>
+              <small id="metric-loss-limit">上限 —</small>
+            </article>
+          </section>
+
+          <section class="content-grid top-grid">
+            <article class="panel control-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="eyebrow">STRATEGY</div>
+                  <h2>启动参数</h2>
+                </div>
+                <span id="farm-state-badge" class="badge neutral">待机</span>
+              </div>
+
+              <form id="farm-form">
+                <div class="field-grid three">
+                  <label class="field">
+                    <span>Bankroll <em>USD</em></span>
+                    <input
+                      id="bankroll"
+                      type="number"
+                      inputmode="decimal"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="必须填写"
+                      required
+                    />
+                    <small>每个候选市场的成本上限</small>
+                  </label>
+                  <label class="field">
+                    <span>最大会话亏损 <em>USD</em></span>
+                    <input
+                      id="max-session-loss"
+                      type="number"
+                      inputmode="decimal"
+                      min="0.01"
+                      step="0.01"
+                      placeholder="必须填写"
+                      required
+                    />
+                    <small>达到后触发 Kill Switch</small>
+                  </label>
+                  <label class="field">
+                    <span>最多同时市场</span>
+                    <input
+                      id="max-positions"
+                      type="number"
+                      inputmode="numeric"
+                      min="1"
+                      max="1000"
+                      step="1"
+                      value="1"
+                      required
+                    />
+                    <small>首次测试保持 1</small>
+                  </label>
+                </div>
+
+                <div class="field-grid two">
+                  <label class="field">
+                    <span>报价深度</span>
+                    <select id="quote-depth">
+                      <option value="safe" selected>Safe</option>
+                      <option value="normal">Normal</option>
+                      <option value="aggressive">Aggressive</option>
+                    </select>
+                  </label>
+                  <div class="exposure-box">
+                    <span>理论最大并行敞口</span>
+                    <strong id="exposure-estimate">—</strong>
+                    <small>粗略值：bankroll × 同时市场数</small>
+                  </div>
+                </div>
+
+                <details class="advanced">
+                  <summary>
+                    <span>市场过滤条件</span>
+                    <small>高级设置</small>
+                  </summary>
+                  <div class="advanced-body">
+                    <p class="form-note">
+                      以下初始值只表示宽范围输入，不代表盈利或安全建议。内置事件风险过滤始终生效。
+                    </p>
+                    <div class="field-grid four">
+                      <label class="field">
+                        <span>24h 成交量最小</span>
+                        <input id="vol-min" type="number" min="0" step="1" value="0" required />
+                      </label>
+                      <label class="field">
+                        <span>24h 成交量最大</span>
+                        <input
+                          id="vol-max"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value="1000000000"
+                          required
+                        />
+                      </label>
+                      <label class="field">
+                        <span>流动性最小</span>
+                        <input id="liq-min" type="number" min="0" step="1" value="0" required />
+                      </label>
+                      <label class="field">
+                        <span>流动性最大</span>
+                        <input
+                          id="liq-max"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value="1000000000"
+                          required
+                        />
+                      </label>
+                      <label class="field">
+                        <span>Spread 最小 <em>¢</em></span>
+                        <input id="spread-min" type="number" min="0" step="0.01" value="0" required />
+                      </label>
+                      <label class="field">
+                        <span>Spread 最大 <em>¢</em></span>
+                        <input id="spread-max" type="number" min="0" step="0.01" value="100" required />
+                      </label>
+                      <label class="field">
+                        <span>每日奖励最小</span>
+                        <input id="reward-min" type="number" min="0" step="0.01" value="0" required />
+                      </label>
+                      <label class="field">
+                        <span>最小盘口深度倍数</span>
+                        <input id="bid-depth" type="number" min="0" step="0.1" value="1.1" />
+                      </label>
+                      <label class="field">
+                        <span>剩余时间</span>
+                        <select id="time-remaining">
+                          <option value="all">不限</option>
+                          <option value="12h">至少 12 小时</option>
+                          <option value="1d">至少 1 天</option>
+                          <option value="7d">至少 7 天</option>
+                          <option value="30d">至少 30 天</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>创建时间</span>
+                        <select id="created-date">
+                          <option value="all">不限</option>
+                          <option value="1d">至少创建 1 天</option>
+                          <option value="7d">至少创建 7 天</option>
+                          <option value="30d">至少创建 30 天</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>24h 价格变化</span>
+                        <select id="change-24h">
+                          <option value="all">不限</option>
+                          <option value="lt10">小于 10%</option>
+                          <option value="gt10">至少 10%</option>
+                          <option value="gt20">至少 20%</option>
+                        </select>
+                      </label>
+                      <label class="field">
+                        <span>24h 价格区间</span>
+                        <select id="range-24h">
+                          <option value="all">不限</option>
+                          <option value="lt5">小于 5%</option>
+                          <option value="lt10">小于 10%</option>
+                          <option value="lt20">小于 20%</option>
+                        </select>
+                      </label>
+                    </div>
+
+                    <div class="field-grid four optional-grid">
+                      <label class="field">
+                        <span>价格最小 <em>0–1</em></span>
+                        <input id="price-min" type="number" min="0" max="1" step="0.01" placeholder="关闭" />
+                      </label>
+                      <label class="field">
+                        <span>价格最大 <em>0–1</em></span>
+                        <input id="price-max" type="number" min="0" max="1" step="0.01" placeholder="关闭" />
+                      </label>
+                      <label class="field">
+                        <span>区域流动性最大</span>
+                        <input id="zone-liq-max" type="number" min="0" step="0.01" placeholder="关闭" />
+                      </label>
+                      <label class="field">
+                        <span>单次成交最大退出损失</span>
+                        <input id="max-fill-loss" type="number" min="0" step="0.01" placeholder="关闭" />
+                      </label>
+                    </div>
+                  </div>
+                </details>
+
+                <label class="confirm-row">
+                  <input id="risk-confirm" type="checkbox" />
+                  <span>我确认这是实盘操作，并理解成交后可能发生亏损。</span>
+                </label>
+
+                <div class="form-actions">
+                  <button id="start-button" class="button primary" type="submit" disabled>
+                    Start Farm
+                  </button>
+                  <button id="stop-button" class="button danger" type="button" disabled>
+                    Stop & Cleanup
+                  </button>
+                </div>
+                <p id="start-blocker" class="blocker-text">等待钱包余额数据。</p>
+              </form>
+            </article>
+
+            <aside class="side-stack">
+              <article class="panel wallet-panel">
+                <div class="panel-heading compact-heading">
+                  <div>
+                    <div class="eyebrow">WALLET</div>
+                    <h2>执行钱包</h2>
+                  </div>
+                  <button id="refresh-wallet" class="button ghost compact" type="button">
+                    刷新
+                  </button>
+                </div>
+                <div id="wallet-empty" class="empty-state">
+                  <strong>未发现钱包</strong>
+                  <span>请先运行 scripts/register_wallet.py</span>
+                </div>
+                <div id="wallet-details" hidden>
+                  <div class="wallet-address-row">
+                    <div>
+                      <span class="meta-label">Polymarket Account Wallet</span>
+                      <code id="wallet-address">—</code>
+                    </div>
+                    <button id="copy-wallet" class="inline-button" type="button">复制</button>
+                  </div>
+                  <dl class="definition-list">
+                    <div><dt>Slot</dt><dd id="wallet-slot">—</dd></div>
+                    <div><dt>余额状态</dt><dd id="wallet-balance-state">—</dd></div>
+                  </dl>
+                </div>
+              </article>
+
+              <article class="panel session-panel">
+                <div class="eyebrow">SESSION</div>
+                <h2>连接说明</h2>
+                <ul class="check-list">
+                  <li><span>1</span>浏览器保持开启</li>
+                  <li><span>2</span>Stop 后等待 farm_cancelled</li>
+                  <li><span>3</span>异常退出后检查 Polymarket 挂单</li>
+                </ul>
+              </article>
+            </aside>
+          </section>
+
+          <section class="panel table-panel">
+            <div class="panel-heading">
+              <div>
+                <div class="eyebrow">POSITIONS</div>
+                <h2>当前持仓与报价</h2>
+              </div>
+              <span id="position-count" class="badge neutral">0 个市场</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>市场</th>
+                    <th>YES / NO 报价</th>
+                    <th>YES / NO 持仓</th>
+                    <th>占用资金</th>
+                    <th>未实现盈亏</th>
+                  </tr>
+                </thead>
+                <tbody id="positions-body">
+                  <tr class="empty-row"><td colspan="5">暂无持仓</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="content-grid lower-grid">
+            <article class="panel table-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="eyebrow">ORDERS</div>
+                  <h2>订单事件</h2>
+                </div>
+                <button id="clear-orders" class="button ghost compact" type="button">清空显示</button>
+              </div>
+              <div class="table-wrap compact-table">
+                <table>
+                  <thead>
+                    <tr><th>时间</th><th>市场</th><th>方向</th><th>价格 × 数量</th><th>状态</th></tr>
+                  </thead>
+                  <tbody id="orders-body">
+                    <tr class="empty-row"><td colspan="5">暂无订单事件</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="panel blacklist-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="eyebrow">BLACKLIST</div>
+                  <h2>手动黑名单</h2>
+                </div>
+                <button id="clear-blacklist" class="button ghost compact" type="button">全部清除</button>
+              </div>
+              <form id="blacklist-form" class="inline-form">
+                <input
+                  id="blacklist-url"
+                  type="url"
+                  placeholder="https://polymarket.com/event/..."
+                  required
+                />
+                <button class="button secondary" type="submit">添加</button>
+              </form>
+              <p class="blacklist-note">
+                新增黑名单会立即阻止后续报价，但现有挂单不保证立即撤销。
+              </p>
+              <div id="blacklist-items" class="blacklist-items">
+                <div class="empty-state small">黑名单为空</div>
+              </div>
+            </article>
+          </section>
+
+          <section class="panel log-panel">
+            <div class="panel-heading">
+              <div>
+                <div class="eyebrow">EVENT STREAM</div>
+                <h2>实时事件</h2>
+              </div>
+              <button id="clear-log" class="button ghost compact" type="button">清空</button>
+            </div>
+            <div id="event-log" class="event-log" aria-live="polite"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast-region" class="toast-region" aria-live="assertive"></div>
+  </body>
+</html>

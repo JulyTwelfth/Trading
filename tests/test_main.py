@@ -11,17 +11,39 @@ restores the pre-test LOG_LEVEL and reloads once more so module state is left sa
 
 import importlib
 import logging
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 import app.main as main_mod
 
 
-def test_app_is_fastapi_with_ws_route():
+def test_app_is_fastapi_with_dashboard_and_ws_routes():
     assert isinstance(main_mod.app, FastAPI)
     paths = {getattr(r, "path", None) for r in main_mod.app.routes}
     assert "/ws" in paths, f"expected /ws route to be included, got {sorted(p for p in paths if p)}"
+    assert "/" in paths
+    assert "/static" in paths
+
+
+@pytest.mark.asyncio
+async def test_dashboard_returns_bundled_index():
+    response = await main_mod.dashboard()
+
+    assert isinstance(response, FileResponse)
+    assert Path(response.path) == main_mod.WEB_DIR / "index.html"
+    assert Path(response.path).is_file()
+
+
+def test_dashboard_assets_are_bundled():
+    assert (main_mod.WEB_DIR / "styles.css").is_file()
+    assert (main_mod.WEB_DIR / "app.js").is_file()
+    html = (main_mod.WEB_DIR / "index.html").read_text(encoding="utf-8")
+    assert 'id="farm-form"' in html
+    assert 'id="start-button"' in html
+    assert 'id="stop-button"' in html
 
 
 @pytest.fixture
